@@ -23,8 +23,10 @@ while true; do
     # Check si Bureau Haut Gauche est en mode Bluetooth via SoCo
     BT_ACTIVE=$("$PYTHON" -c "
 import soco
+from soco.discovery import scan_network
 try:
-    speakers = {s.player_name: s for s in soco.discover(timeout=3) or []}
+    found = soco.discover(timeout=3) or scan_network(scan_timeout=2) or []
+    speakers = {s.player_name: s for s in found}
     bhg = speakers.get('Bureau Haut Gauche')
     if bhg:
         media = bhg.get_current_media_info()

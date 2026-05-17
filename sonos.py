@@ -3,13 +3,15 @@
 
 import sys
 import soco
+from soco.discovery import scan_network
 
 SPEAKERS = None
 
 def get_speakers():
     global SPEAKERS
     if SPEAKERS is None:
-        SPEAKERS = {s.player_name: s for s in soco.discover(timeout=5) or []}
+        found = soco.discover(timeout=5) or scan_network(scan_timeout=2) or []
+        SPEAKERS = {s.player_name: s for s in found}
     return SPEAKERS
 
 def get_coord():
@@ -97,6 +99,22 @@ def cmd_status():
         muted = "🔇" if s.mute else "🔊"
         print(f"{muted} {name} — Vol: {s.volume} — {state}")
 
+def cmd_bass_max():
+    """Met les basses à +10 sur toutes les enceintes."""
+    sp = get_speakers()
+    for name, s in sp.items():
+        s.bass = 10
+        print(f"🔊 {name} — bass: +10")
+    print("✅ Basses à fond partout")
+
+def cmd_bass_off():
+    """Remet les basses à 0 sur toutes les enceintes."""
+    sp = get_speakers()
+    for name, s in sp.items():
+        s.bass = 0
+        print(f"🔊 {name} — bass: 0")
+    print("✅ Basses à zéro partout")
+
 COMMANDS = {
     "sync": cmd_sync,
     "bureau": cmd_bureau,
@@ -106,6 +124,8 @@ COMMANDS = {
     "stop": cmd_stop,
     "play": cmd_play,
     "status": cmd_status,
+    "bass_max": cmd_bass_max,
+    "bass_off": cmd_bass_off,
 }
 
 if __name__ == "__main__":
