@@ -2,16 +2,19 @@
 """Sonos control script for OpenClaw."""
 
 import sys
+import os
+import json
 import soco
-from soco.discovery import scan_network
 
 SPEAKERS = None
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sonos_speakers.json")
 
 def get_speakers():
     global SPEAKERS
     if SPEAKERS is None:
-        found = soco.discover(timeout=5) or scan_network(scan_timeout=2) or []
-        SPEAKERS = {s.player_name: s for s in found}
+        with open(CACHE_FILE) as f:
+            ips = json.load(f)
+        SPEAKERS = {name: soco.SoCo(ip) for name, ip in ips.items()}
     return SPEAKERS
 
 def get_coord():

@@ -22,18 +22,15 @@ log "Daemon démarré (mode Sonos BT check)"
 while true; do
     # Check si Bureau Haut Gauche est en mode Bluetooth via SoCo
     BT_ACTIVE=$("$PYTHON" -c "
-import soco
-from soco.discovery import scan_network
+import json, os, soco
 try:
-    found = soco.discover(timeout=3) or scan_network(scan_timeout=2) or []
-    speakers = {s.player_name: s for s in found}
-    bhg = speakers.get('Bureau Haut Gauche')
-    if bhg:
-        media = bhg.get_current_media_info()
-        if 'bluetooth' in (media.get('channel','') + media.get('uri','')).lower():
-            print('yes')
-        else:
-            print('no')
+    cache = os.path.expanduser('~/.openclaw/workspace/scripts/sonos_speakers.json')
+    with open(cache) as f:
+        ips = json.load(f)
+    bhg = soco.SoCo(ips['Bureau Haut Gauche'])
+    media = bhg.get_current_media_info()
+    if 'bluetooth' in (media.get('channel','') + media.get('uri','')).lower():
+        print('yes')
     else:
         print('no')
 except:
