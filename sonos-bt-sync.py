@@ -53,7 +53,11 @@ def log(msg: str) -> None:
         pass
     with LOG_FILE.open("a", encoding="utf-8") as f:
         f.write(line)
-    print(line, end="", flush=True)
+    if sys.stdout is not None:
+        try:
+            print(line, end="", flush=True)
+        except (OSError, ValueError):
+            pass
 
 
 def read_state() -> str:
@@ -95,7 +99,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, _handle_stop)
     signal.signal(signal.SIGTERM, _handle_stop)
 
-    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    if sys.stdout is not None and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
         try:
             sys.stdout.reconfigure(encoding="utf-8")
             sys.stderr.reconfigure(encoding="utf-8")
