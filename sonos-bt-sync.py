@@ -134,12 +134,17 @@ def main() -> int:
             time.sleep(STABILIZE_SECONDS)
             try:
                 sonos_cli.SPEAKERS = None
-                sonos_cli.cmd_partout()
+                partout_failures = sonos_cli.cmd_partout() or []
                 sonos_cli.SPEAKERS = None
-                sonos_cli.cmd_sync()
+                sync_failures = sonos_cli.cmd_sync() or []
+                all_failures = set(partout_failures) | set(sync_failures)
+                if all_failures:
+                    log(f"WARN: partial sync, failed: {sorted(all_failures)}; will retry next poll")
+                else:
+                    log("Sync OK on all speakers")
+                    write_state("connected")
             except Exception as e:
-                log(f"WARN: sync failed ({type(e).__name__}: {e})")
-            write_state("connected")
+                log(f"WARN: sync crashed ({type(e).__name__}: {e}); will retry next poll")
         elif not active and prev == "connected":
             log("BT disconnected from main speaker")
             write_state("disconnected")

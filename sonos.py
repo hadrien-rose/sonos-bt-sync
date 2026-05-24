@@ -30,13 +30,42 @@ def get_coord():
     return get_speakers()[BT_SPEAKER_NAME]
 
 def cmd_sync():
-    """Calque le volume de toutes les enceintes sur le speaker BT."""
+    """Calque le volume de toutes les enceintes sur le speaker BT.
+
+    Returns: list of (name, exception) for speakers that failed.
+    """
+    import time
     sp = get_speakers()
     ref_vol = sp[BT_SPEAKER_NAME].volume
-    for s in sp.values():
+
+    def _apply(name, s):
         s.mute = False
         s.volume = ref_vol
-    print(f"✅ Toutes les enceintes à {ref_vol} (sync sur {BT_SPEAKER_NAME})")
+
+    failures = []
+    for name, s in sp.items():
+        try:
+            _apply(name, s)
+        except Exception as e:
+            failures.append((name, s, e))
+
+    if failures:
+        time.sleep(2)
+        retried = []
+        for name, s, _ in failures:
+            try:
+                _apply(name, s)
+            except Exception as e:
+                retried.append((name, e))
+        failures = retried
+
+    if failures:
+        for name, e in failures:
+            print(f"⚠️ {name}: {type(e).__name__}")
+        print(f"⚠️ Sync partiel : {len(sp) - len(failures)}/{len(sp)} OK (ref {ref_vol})")
+    else:
+        print(f"✅ Toutes les enceintes à {ref_vol} (sync sur {BT_SPEAKER_NAME})")
+    return [name for name, _ in failures]
 
 def cmd_bureau():
     """Mode bureau : Fond et Barre De Son +12, speaker BT -10."""
@@ -57,15 +86,48 @@ def cmd_bureau():
     print("✅ Mode bureau activé")
 
 def cmd_partout():
-    """Groupe toutes les enceintes et lance la lecture."""
+    """Groupe toutes les enceintes et lance la lecture.
+
+    Returns: list of speaker names that failed to join.
+    """
+    import time
     sp = get_speakers()
     coord = get_coord()
-    for name, s in sp.items():
-        if name != BT_SPEAKER_NAME:
-            s.join(coord)
-            s.mute = False
-    coord.play()
-    print("✅ Lecture sur toutes les enceintes")
+
+    def _join(name, s):
+        s.join(coord)
+        s.mute = False
+
+    others = [(name, s) for name, s in sp.items() if name != BT_SPEAKER_NAME]
+    failures = []
+    for name, s in others:
+        try:
+            _join(name, s)
+        except Exception as e:
+            failures.append((name, s, e))
+
+    if failures:
+        time.sleep(2)
+        retried = []
+        for name, s, _ in failures:
+            try:
+                _join(name, s)
+            except Exception as e:
+                retried.append((name, e))
+        failures = retried
+
+    try:
+        coord.play()
+    except Exception as e:
+        print(f"⚠️ play() sur {BT_SPEAKER_NAME}: {type(e).__name__}")
+
+    if failures:
+        for name, e in failures:
+            print(f"⚠️ {name}: {type(e).__name__}")
+        print(f"⚠️ Groupement partiel : {len(others) - len(failures)}/{len(others)} OK")
+    else:
+        print("✅ Lecture sur toutes les enceintes")
+    return [name for name, _ in failures]
 
 def cmd_mute_sauf(keep):
     """Mute tout sauf l'enceinte spécifiée."""
