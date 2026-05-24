@@ -29,54 +29,94 @@ No app needed. No manual steps. Just connect your phone and everything works.
 
 ### Requirements
 
-- Python 3
-- [SoCo](https://github.com/SoCo/SoCo) (`pip install soco`)
-- A Sonos speaker with Bluetooth (Era 100, Era 300, Move, Roam...)
+- Python 3.9+
+- A Sonos speaker with Bluetooth (Era 100, Era 300, Move, Roam...) on the same Wi-Fi network as this machine
 
-### Configuration
+### 1. Install
 
-Edit `sonos.py` to match your speaker names:
+Clone the repo, create a virtualenv, install [SoCo](https://github.com/SoCo/SoCo):
+
+```bash
+# Windows (PowerShell)
+git clone https://github.com/hadrien-rose/sonos-bt-sync.git
+cd sonos-bt-sync
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install soco
+
+# macOS / Linux
+git clone https://github.com/hadrien-rose/sonos-bt-sync.git
+cd sonos-bt-sync
+python3 -m venv .venv
+./.venv/bin/python -m pip install soco
+```
+
+### 2. Discover your speakers
+
+`discover.py` auto-detects every Sonos on your network and writes `sonos_speakers.json`:
+
+```bash
+# Windows
+.\.venv\Scripts\python.exe discover.py
+
+# macOS / Linux
+./.venv/bin/python discover.py
+```
+
+### 3. Set your BT speaker name
+
+Open `sonos.py` and edit `BT_SPEAKER_NAME` (top of file) to match the Sonos speaker your phone connects to via Bluetooth:
 
 ```python
-# In get_coord(), change to your BT receiver speaker name:
-def get_coord():
-    return get_speakers()["Bureau Haut Gauche"]  # ← your BT speaker
+BT_SPEAKER_NAME = "Bureau Haut Gauche"   # ← change to your BT receiver
 ```
 
-Edit `sonos-bt-sync.sh` to set your paths:
+### 4. Run the daemon
 
 ```bash
-PYTHON="/path/to/your/python3"        # Python with SoCo installed
-SONOS_SCRIPT="/path/to/sonos.py"
+# Windows
+.\.venv\Scripts\python.exe sonos-bt-sync.py
+
+# macOS / Linux
+./.venv/bin/python sonos-bt-sync.py
 ```
 
-### Run the daemon
+Logs and state live in a per-user data dir:
+- **Windows:** `%LOCALAPPDATA%\sonos-bt-sync\`
+- **macOS / Linux:** `~/.local/share/sonos-bt-sync/` (or `$XDG_DATA_HOME/sonos-bt-sync/`)
 
-```bash
-# Start in background
-nohup bash sonos-bt-sync.sh &
+### 5. Run at startup
 
-# Check logs
-tail -f /tmp/sonos-bt-sync.log
+**Windows** — drop a shortcut in the Startup folder:
+
+```powershell
+# Open the Startup folder
+explorer shell:startup
 ```
 
-### Run at startup (macOS)
+Create a new shortcut in that folder pointing to:
+- **Target:** `C:\path\to\sonos-bt-sync\.venv\Scripts\pythonw.exe C:\path\to\sonos-bt-sync\sonos-bt-sync.py`
+- **Start in:** `C:\path\to\sonos-bt-sync`
 
-Create a LaunchAgent plist to start the daemon automatically on login.
+`pythonw.exe` (instead of `python.exe`) runs without a console window.
+
+**macOS** — create a LaunchAgent plist that runs `.venv/bin/python sonos-bt-sync.py` on login.
+
+**Linux** — create a systemd user service that runs `.venv/bin/python sonos-bt-sync.py`.
 
 ## Manual Controls
 
 `sonos.py` also works as a standalone CLI:
 
 ```bash
-python3 sonos.py sync          # Sync all volumes to match BT speaker
-python3 sonos.py partout       # Group all speakers + play
-python3 sonos.py bureau        # Office mode (boost nearby speakers)
-python3 sonos.py volume 40     # Set all speakers to volume 40
-python3 sonos.py mute_sauf X   # Mute everything except speaker X
-python3 sonos.py stop           # Pause everywhere
-python3 sonos.py play           # Resume playback
-python3 sonos.py status         # Show all speakers status
+# Use the venv's python
+python sonos.py sync          # Sync all volumes to match BT speaker
+python sonos.py partout       # Group all speakers + play
+python sonos.py bureau        # Office mode (boost nearby speakers)
+python sonos.py volume 40     # Set all speakers to volume 40
+python sonos.py mute_sauf X   # Mute everything except speaker X
+python sonos.py stop          # Pause everywhere
+python sonos.py play          # Resume playback
+python sonos.py status        # Show all speakers status
 ```
 
 ## How it works

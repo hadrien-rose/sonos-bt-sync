@@ -6,6 +6,15 @@ import os
 import json
 import soco
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+
+BT_SPEAKER_NAME = "Bureau Haut Gauche"
+
 SPEAKERS = None
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sonos_speakers.json")
 
@@ -18,25 +27,25 @@ def get_speakers():
     return SPEAKERS
 
 def get_coord():
-    return get_speakers()["Bureau Haut Gauche"]
+    return get_speakers()[BT_SPEAKER_NAME]
 
 def cmd_sync():
-    """Calque le volume de toutes les enceintes sur Bureau Haut Gauche."""
+    """Calque le volume de toutes les enceintes sur le speaker BT."""
     sp = get_speakers()
-    ref_vol = sp["Bureau Haut Gauche"].volume
+    ref_vol = sp[BT_SPEAKER_NAME].volume
     for s in sp.values():
         s.mute = False
         s.volume = ref_vol
-    print(f"✅ Toutes les enceintes à {ref_vol} (sync sur Bureau Haut Gauche)")
+    print(f"✅ Toutes les enceintes à {ref_vol} (sync sur {BT_SPEAKER_NAME})")
 
 def cmd_bureau():
-    """Mode bureau : Fond et Barre De Son +12, Bureau Haut Gauche -10."""
+    """Mode bureau : Fond et Barre De Son +12, speaker BT -10."""
     sp = get_speakers()
-    bhg = sp["Bureau Haut Gauche"]
+    bhg = sp[BT_SPEAKER_NAME]
     base = bhg.volume
 
     bhg.volume = max(0, base - 10)
-    print(f"Bureau Haut Gauche: {base} → {bhg.volume}")
+    print(f"{BT_SPEAKER_NAME}: {base} → {bhg.volume}")
 
     for name in ["Fond", "Barre De Son"]:
         s = sp[name]
@@ -52,7 +61,7 @@ def cmd_partout():
     sp = get_speakers()
     coord = get_coord()
     for name, s in sp.items():
-        if name != "Bureau Haut Gauche":
+        if name != BT_SPEAKER_NAME:
             s.join(coord)
             s.mute = False
     coord.play()
