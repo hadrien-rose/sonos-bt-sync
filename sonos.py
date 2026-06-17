@@ -67,16 +67,22 @@ def cmd_sync():
         print(f"✅ Toutes les enceintes à {ref_vol} (sync sur {BT_SPEAKER_NAME})")
     return [name for name, _ in failures]
 
+DESK_SPEAKERS = [BT_SPEAKER_NAME, "Bureau Droite"]
+DISTANT_SPEAKERS = ["Fond", "Salle de bain"]
+
+
 def cmd_bureau():
-    """Mode bureau : Fond et Barre De Son +12, speaker BT -10."""
+    """Mode bureau : enceintes du bureau -10, enceintes distantes +12."""
     sp = get_speakers()
-    bhg = sp[BT_SPEAKER_NAME]
-    base = bhg.volume
+    base = sp[BT_SPEAKER_NAME].volume
 
-    bhg.volume = max(0, base - 10)
-    print(f"{BT_SPEAKER_NAME}: {base} → {bhg.volume}")
+    for name in DESK_SPEAKERS:
+        s = sp[name]
+        old = s.volume
+        s.volume = max(0, base - 10)
+        print(f"{name}: {old} → {s.volume}")
 
-    for name in ["Fond", "Barre De Son"]:
+    for name in DISTANT_SPEAKERS:
         s = sp[name]
         old = s.volume
         s.volume = min(100, old + 12)
