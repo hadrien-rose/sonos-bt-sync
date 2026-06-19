@@ -62,9 +62,10 @@ def log(msg: str) -> None:
 
 def read_state() -> str:
     try:
-        return STATE_FILE.read_text(encoding="utf-8").strip()
+        raw = STATE_FILE.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
-        return "disconnected"
+        return "idle"
+    return normalize_state(raw)
 
 
 def write_state(state: str) -> None:
@@ -80,11 +81,14 @@ def load_bt_speaker_ip() -> str:
     return ips[name]
 
 
-def bt_is_active(ip: str) -> bool:
-    bhg = soco.SoCo(ip)
-    media = bhg.get_current_media_info()
-    blob = (media.get("channel", "") + media.get("uri", "")).lower()
-    return "bluetooth" in blob
+VALID_STATES = ("idle", "bt", "linein")
+LEGACY_STATE_MAP = {"disconnected": "idle", "connected": "bt"}
+
+
+def normalize_state(s: str) -> str:
+    s = (s or "").strip()
+    s = LEGACY_STATE_MAP.get(s, s)
+    return s if s in VALID_STATES else "idle"
 
 
 _stop = False
@@ -111,14 +115,33 @@ def main() -> int:
         return 1
 
     bt_ip = load_bt_speaker_ip()
-    log(f"Daemon started (BT speaker: {sonos_cli.BT_SPEAKER_NAME} @ {bt_ip}, poll={POLL_SECONDS}s)")
+    log(f"Daemon started (main speaker: {sonos_cli.BT_SPEAKER_NAME} @ {bt_ip}, poll={POLL_SECONDS}s)")
 
     if not STATE_FILE.exists():
-        write_state("disconnected")
+        write_state("idle")
+
+    def group_and_sync(source: str) -> bool:
+        """Group all speakers and sync volume. Return True if fully successful."""
+        try:
+            sonos_cli.SPEAKERS = None
+            partout_failures = sonos_cli.cmd_partout() or []
+            sonos_cli.SPEAKERS = None
+            sync_failures = sonos_cli.cmd_sync() or []
+            all_failures = set(partout_failures) | set(sync_failures)
+            if all_failures:
+                log(f"WARN: partial sync ({source}), failed: {sorted(all_failures)}; will retry next poll")
+                return False
+            log(f"Sync OK on all speakers ({source})")
+            return True
+        except Exception as e:
+            log(f"WARN: sync crashed ({type(e).__name__}: {e}); will retry next poll")
+            return False
 
     while not _stop:
         try:
-            active = bt_is_active(bt_ip)
+            bhg = soco.SoCo(bt_ip)
+            source = sonos_cli.detect_source(bhg)
+            playing = sonos_cli.transport_is_playing(bhg)
         except Exception as e:
             log(f"WARN: speaker probe failed ({type(e).__name__}: {e}); retrying")
             for _ in range(POLL_SECONDS):
@@ -128,26 +151,34 @@ def main() -> int:
             continue
 
         prev = read_state()
+        current = source or "idle"
 
-        if active and prev == "disconnected":
-            log("BT active on main speaker -> grouping + syncing")
+        if current != "idle" and prev == "idle":
+            log(f"Source active: {current} -> grouping + syncing")
             time.sleep(STABILIZE_SECONDS)
+            if group_and_sync(current):
+                write_state(current)
+
+        elif current != "idle" and prev != "idle" and current != prev:
+            log(f"Source changed: {prev} -> {current}")
+            write_state(current)
+
+        elif current == "linein" and prev == "linein" and playing:
             try:
                 sonos_cli.SPEAKERS = None
-                partout_failures = sonos_cli.cmd_partout() or []
-                sonos_cli.SPEAKERS = None
-                sync_failures = sonos_cli.cmd_sync() or []
-                all_failures = set(partout_failures) | set(sync_failures)
-                if all_failures:
-                    log(f"WARN: partial sync, failed: {sorted(all_failures)}; will retry next poll")
-                else:
-                    log("Sync OK on all speakers")
-                    write_state("connected")
+                missing = sonos_cli.group_missing(bhg)
+                if missing:
+                    log(f"Line-in playing but group degraded (missing: {sorted(missing)}); regrouping")
+                    sonos_cli.SPEAKERS = None
+                    fails = sonos_cli.cmd_partout() or []
+                    if fails:
+                        log(f"WARN: regroup partial: {sorted(set(fails))}")
             except Exception as e:
-                log(f"WARN: sync crashed ({type(e).__name__}: {e}); will retry next poll")
-        elif not active and prev == "connected":
-            log("BT disconnected from main speaker")
-            write_state("disconnected")
+                log(f"WARN: group integrity check failed ({type(e).__name__}: {e})")
+
+        elif current == "idle" and prev != "idle":
+            log(f"Source ended: {prev} -> idle")
+            write_state("idle")
 
         for _ in range(POLL_SECONDS):
             if _stop:

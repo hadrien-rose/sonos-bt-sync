@@ -29,6 +29,52 @@ def get_speakers():
 def get_coord():
     return get_speakers()[BT_SPEAKER_NAME]
 
+
+def detect_source(speaker=None):
+    """Detect the audio source type on the BT speaker (or given speaker).
+
+    Returns 'bt', 'linein', or None for idle/other sources (streaming, AirPlay...).
+    """
+    if speaker is None:
+        speaker = get_coord()
+    try:
+        media = speaker.get_current_media_info()
+    except Exception:
+        return None
+    blob = ((media.get("channel") or "") + " " + (media.get("uri") or "")).lower()
+    if "bluetooth" in blob:
+        return "bt"
+    if "line-in" in blob or "linein" in blob:
+        return "linein"
+    return None
+
+
+def transport_is_playing(speaker=None):
+    """True if the speaker is currently playing audio (vs. paused/stopped)."""
+    if speaker is None:
+        speaker = get_coord()
+    try:
+        ti = speaker.get_current_transport_info()
+    except Exception:
+        return False
+    return ti.get("current_transport_state") == "PLAYING"
+
+
+def group_missing(speaker=None):
+    """Return the set of speaker names NOT currently in the speaker's group.
+
+    Used by the daemon to detect group degradation while line-in is playing.
+    """
+    if speaker is None:
+        speaker = get_coord()
+    sp = get_speakers()
+    expected = set(sp.keys())
+    try:
+        members = {m.player_name for m in speaker.group.members}
+    except Exception:
+        return set()
+    return expected - members
+
 def cmd_sync():
     """Calque le volume de toutes les enceintes sur le speaker BT.
 
